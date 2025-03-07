@@ -1,3 +1,4 @@
+#include <stdexcept>
 #pragma
 
 #include "CachePolicy.h"
@@ -25,9 +26,11 @@ public:
 
     Key get_key() const { return _key; }
     Value get_value() const { return _value; }
-    void set_value(const Value &value) { value = _value; }
+    void set_value(const Value &value) { _value = value; }
     size_t get_accessCount() const { return _accessCount; }
     void increment_accessCount() { ++_accessCount; }
+
+    friend class LruCache<Key, Value>;
 };
 
 template <typename Key, typename Value>
@@ -48,22 +51,25 @@ public:
         }
         add_newNode(key, value);
     }
-    bool get(Key key, Value value) override {
+
+    // value is passed by reference to return the value
+    bool get(Key key, Value &value) override {
         std::lock_guard<std::mutex> lock(_mutex);
         auto it = _nodeMap.find(key);
         if (it != _nodeMap.end()) {
-            move_to_recent(it.second);
-            value = it.second->get_value();
+            move_to_recent(it->second);
+            value = it->second->get_value();
             return true;
         }
         return false;
     }
+
     Value get(Key key) override {
-        std::lock_guard<std::mutex> lock(_mutex);
         Value value{};
         get(key, value);
         return value;
     }
+
     void remove(Key key) {
         std::lock_guard<std::mutex> lock(_mutex);
         auto it = _nodeMap.find(key);
@@ -100,5 +106,48 @@ void LruCache<Key, Value>::initialize_list() {
 
 template <typename Key, typename Value>
 void LruCache<Key, Value>::update_existing_node(NodePtr node,
-                                                const Value &value) {}
+                                                const Value &value) {
+    node->set_value(value);
+    move_to_recent(node);
+}
+
+template <typename Key, typename Value>
+void LruCache<Key, Value>::add_newNode(const Key &key, const Value &value) {
+    if (_nodeMap.size() >= _capacity) {
+        evict_node();
+    }
+
+    NodePtr newNode = std::make_shared<LruNodeType>(key, value);
+    insert_node(newNode);
+    _nodeMap[key] = newNode;
+}
+
+template <typename Key, typename Value>
+void LruCache<Key, Value>::move_to_recent(NodePtr node) {
+    remove_node(node);
+    insert_node(node);
+}
+
+template <typename Key, typename Value>
+void LruCache<Key, Value>::remove_node(NodePtr node) {
+    node->_prev->_next = node->_next;
+    node->_next->_prev = node->_prev;
+}
+
+// in tail insert to remove the least recently used node
+template <typename Key, typename Value>
+void LruCache<Key, Value>::insert_node(NodePtr node) {
+    node->_next = _dummyTail;
+    node->_prev = _dummyTail->_prev;
+    _dummyTail->_prev->_next = node;
+    _dummyTail->_prev = node;
+}
+
+template <typename Key, typename Value>
+void LruCache<Key, Value>::evict_node() {
+    NodePtr node = _dummyHead->_next;
+    remove_node(node);
+    _nodeMap.erase(node->get_key());
+}
+
 } // namespace MinCache
