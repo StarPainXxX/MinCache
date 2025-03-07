@@ -29,8 +29,8 @@ if (NOT MSVC)
 endif()
 
 
-file(GLOB_RECURSE sources CONFIGURE_DEPENDS src/*.cpp include/*.h)
-add_executable(main ${sources})
+file(GLOB_RECURSE sources CONFIGURE_DEPENDS *.cpp *.h)
+add_executable(main main.cpp)
 
 set_target_properties(main PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
