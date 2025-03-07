@@ -6,7 +6,7 @@ template <typename Key, typename Value>
 
 class CachePolicy {
 public:
-    virtual ~CachePolicy();
+    virtual ~CachePolicy() = default;
     // add cache api:
     virtual void put(Key key, Value value) = 0;
     //
