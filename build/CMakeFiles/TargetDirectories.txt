@@ -1,0 +1,3 @@
+/home/joel/code/repositories/MinCache/build/CMakeFiles/main.dir
+/home/joel/code/repositories/MinCache/build/CMakeFiles/edit_cache.dir
+/home/joel/code/repositories/MinCache/build/CMakeFiles/rebuild_cache.dir

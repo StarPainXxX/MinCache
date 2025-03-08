@@ -1,4 +1,4 @@
-#include <stdexcept>
+#include <cstddef>
 #pragma
 
 #include "CachePolicy.h"
@@ -110,6 +110,39 @@ void LruCache<Key, Value>::update_existing_node(NodePtr node,
     node->set_value(value);
     move_to_recent(node);
 }
+template <typename Key, typename Value>
+class LruKCache : public LruCache<Key, Value> {
+public:
+    LruKCache(int capacity, int historyCapacity, int k)
+        : LruCache<Key, Value>(capacity),
+          _historyList(
+              std::make_unique<LruCache<Key, size_t>>(historyCapacity)),
+          _k(k) {}
+
+    Value get(Key key) {
+        int histroyCount = _historyList.get(key);
+        _historyList->put(key, ++histroyCount);
+
+        return LruCache<Key, Value>::get(key);
+    }
+
+    void put(Key key, Value value) {
+        if (LruCache<Key, Value>::get(key) != "")
+            LruCache<Key, Value>::put(key, value);
+
+        int histroyCount = _historyList->get(key);
+        _historyList->put(key, ++histroyCount);
+
+        if (histroyCount >= _k) {
+            _historyList->remove(key);
+            LruCache<Key, Value>::put(key, value);
+        }
+    }
+
+private:
+    int _k;
+    std::unique_ptr<LruCache<Key, size_t>> _historyList;
+};
 
 template <typename Key, typename Value>
 void LruCache<Key, Value>::add_newNode(const Key &key, const Value &value) {
