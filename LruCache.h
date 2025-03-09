@@ -1,10 +1,14 @@
-#include <cstddef>
 #pragma
 
 #include "CachePolicy.h"
+#include <cmath>
+#include <cstddef>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace MinCache {
 
@@ -96,20 +100,7 @@ private:
     NodePtr _dummyTail;
 };
 
-template <typename Key, typename Value>
-void LruCache<Key, Value>::initialize_list() {
-    _dummyHead = std::make_shared<LruNodeType>(Key(), Value());
-    _dummyTail = std::make_shared<LruNodeType>(Key(), Value());
-    _dummyHead->_next = _dummyTail;
-    _dummyTail->_prev = _dummyHead;
-}
-
-template <typename Key, typename Value>
-void LruCache<Key, Value>::update_existing_node(NodePtr node,
-                                                const Value &value) {
-    node->set_value(value);
-    move_to_recent(node);
-}
+// Lru-k
 template <typename Key, typename Value>
 class LruKCache : public LruCache<Key, Value> {
 public:
@@ -120,7 +111,7 @@ public:
           _k(k) {}
 
     Value get(Key key) {
-        int histroyCount = _historyList.get(key);
+        int histroyCount = _historyList->get(key);
         _historyList->put(key, ++histroyCount);
 
         return LruCache<Key, Value>::get(key);
@@ -143,6 +134,65 @@ private:
     int _k;
     std::unique_ptr<LruCache<Key, size_t>> _historyList;
 };
+
+template <typename Key, typename Value>
+
+class HashLruCache {
+public:
+    HashLruCache(size_t capacity, int sliceNum)
+        : _capacity(capacity),
+          _sliceNum(sliceNum > 0 ? sliceNum
+                                 : std::thread::hardware_concurrency()) {
+        size_t sliceSize = std::ceil(capacity / static_cast<double>(_sliceNum));
+        for (int i = 0; i < _sliceNum; ++i) {
+            _lruSliceCaches.emplace_back(
+                std::make_unique<LruCache<Key, Value>>(sliceSize));
+        }
+    }
+
+    void put(Key key, Value value) {
+        size_t sliceIndex = Hash(key) % _sliceNum;
+        return _lruSliceCaches[sliceIndex]->put(key, value);
+    }
+
+    bool get(Key key, Value &value) {
+        size_t sliceIndex = Hash(key) % _sliceNum;
+        return _lruSliceCaches[sliceIndex]->get(key, value);
+    }
+
+    Value get(Key key) {
+        Value value{};
+        memset(&value, 0, sizeof(Value));
+        get(key, value);
+        return value;
+    }
+
+private:
+    size_t Hash(const Key key) {
+        std::hash<Key> hashFunc;
+        return hashFunc(key);
+    }
+
+private:
+    size_t _capacity;
+    int _sliceNum;
+    std::vector<std::unique_ptr<LruCache<Key, Value>>> _lruSliceCaches;
+};
+
+template <typename Key, typename Value>
+void LruCache<Key, Value>::initialize_list() {
+    _dummyHead = std::make_shared<LruNodeType>(Key(), Value());
+    _dummyTail = std::make_shared<LruNodeType>(Key(), Value());
+    _dummyHead->_next = _dummyTail;
+    _dummyTail->_prev = _dummyHead;
+}
+
+template <typename Key, typename Value>
+void LruCache<Key, Value>::update_existing_node(NodePtr node,
+                                                const Value &value) {
+    node->set_value(value);
+    move_to_recent(node);
+}
 
 template <typename Key, typename Value>
 void LruCache<Key, Value>::add_newNode(const Key &key, const Value &value) {
