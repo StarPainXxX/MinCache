@@ -1,6 +1,5 @@
 #include "CachePolicy.h"
 #include "LruCache.h"
-#include <algorithm>
 #include <array>
 #include <chrono>
 #include <iomanip>
@@ -88,7 +87,7 @@ void test_loop_pattern() {
     std::cout << "\n=== Test2: Test loop pattern ===" << std::endl;
 
     const int CAPACITY = 50;
-    const int OPERATIONS = 500000; // Number of get operations
+    const int OPERATIONS = 200000; // Number of get operations
     const int LOOP_SIZE = 500;
 
     MinCache::LruCache<int, std::string> lru(CAPACITY);
@@ -130,8 +129,70 @@ void test_loop_pattern() {
     print_results("Hot key access data", CAPACITY, get_operations, hits);
 }
 
+void test_workload_shift() {
+    std::cout << "\n=== Test3: Test workload shift ===" << std::endl;
+
+    const int CAPACITY = 4;
+    const int OPERATIONS = 80000; // Number of get operations
+    const int PHASE_LENGTH = OPERATIONS / 5;
+
+    MinCache::LruCache<int, std::string> lru(CAPACITY);
+    MinCache::LruKCache<int, std::string> lruk(CAPACITY, 2 * CAPACITY, 2);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::array<MinCache::CachePolicy<int, std::string> *, 2> caches = {&lru,
+                                                                       &lruk};
+    std::vector<int> hits(2, 0);
+    std::vector<int> get_operations(2, 0);
+
+    for (int i = 0; i < caches.size(); ++i) {
+        for (int key = 0; key < 1000; ++key) {
+            std::string value = "init" + std::to_string(key);
+            caches[i]->put(key, value);
+        }
+
+        for (int op = 0; op < OPERATIONS; ++op) {
+            int key;
+            if (op < PHASE_LENGTH) {
+                key = gen() % 5;
+            } else if (op < 2 * PHASE_LENGTH) {
+                key = gen() % 1000;
+            } else if (op < 3 * PHASE_LENGTH) {
+                key = (op - PHASE_LENGTH * 2) % 100;
+            } else if (op < 4 * PHASE_LENGTH) {
+                int locality = (op / 1000) % 10;
+                key = locality * 20 + gen() % 20;
+            } else {
+                int r = gen() % 100;
+                if (r < 30) {
+                    key = gen() % 5;
+                } else if (r < 60) {
+                    key = 5 + (gen() % 95);
+                } else {
+                    key = 100 + (gen() % 900);
+                }
+            }
+
+            std::string result;
+            get_operations[i]++;
+            if (caches[i]->get(key, result)) {
+                hits[i]++;
+            }
+
+            if (gen() % 100 < 30) {
+                std::string value = "new" + std::to_string(key);
+                caches[i]->put(key, value);
+            }
+        }
+    }
+
+    print_results("Workload shift", CAPACITY, get_operations, hits);
+}
+
 int main(int argc, char *argv[]) {
     test_hotdata_acess();
     test_loop_pattern();
+    test_workload_shift();
     return 0;
 }
