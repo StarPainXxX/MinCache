@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/home/joel/code/repositories/MinCache/build",
-  "command": "/usr/bin/c++   -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles/main.dir/main.cpp.o -c /home/joel/code/repositories/MinCache/main.cpp",
-  "file": "/home/joel/code/repositories/MinCache/main.cpp",
-  "output": "CMakeFiles/main.dir/main.cpp.o"
-}
-]
