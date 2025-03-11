@@ -1,10 +1,15 @@
 #pragma
 
 #include "CachePolicy.h"
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace MinCache {
 
@@ -148,6 +153,54 @@ private:
 
     NodeMap _nodeMap;
     std::unordered_map<int, FreqList<Key, Value> *> _freqToFreqList;
+};
+
+template <typename Key, typename Value> class HashLfuCache {
+public:
+    HashLfuCache(size_t cacpcity, int sliceNum, int maxAverageNum = 10)
+        : _sliceNum(sliceNum > 0 ? sliceNum
+                                 : std::thread::hardware_concurrency()),
+          _capacity(cacpcity) {
+        size_t sliceSize =
+            std::ceil(_capacity / static_cast<double>(_sliceNum));
+        for (int i = 0; i < _sliceNum; ++i) {
+            _lfuSliceCache.emplace(
+                new LfuCache<Key, Value>(sliceNum, maxAverageNum));
+        }
+    }
+
+    void put(Key key, Value value) {
+        size_t sliceIndex = Hash(key) % _sliceNum;
+        return _lfuSliceCache[sliceIndex]->put(key, value);
+    }
+
+    void get(Key key, Value &value) {
+        size_t sliceIndex = Hash(key) % _sliceNum;
+        return _lfuSliceCache[sliceIndex]->get(key, value);
+    }
+
+    void get(Key key) {
+        Value value;
+        get(key, value);
+        return value;
+    }
+
+    void purge() {
+        for (auto &lfuSliceCache : _lfuSliceCache) {
+            lfuSliceCache->purge();
+        }
+    }
+
+private:
+    size_t Hash(Key key) {
+        std::hash<Key> hashFunc;
+        return hashFunc(key);
+    }
+
+private:
+    size_t _capacity;
+    int _sliceNum;
+    std::vector<std::unique_ptr<LfuCache<Key, Value>>> _lfuSliceCache;
 };
 
 template <typename Key, typename Value>
