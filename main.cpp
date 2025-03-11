@@ -1,4 +1,5 @@
 #include "CachePolicy.h"
+#include "LfuCache.h"
 #include "LruCache.h"
 #include <array>
 #include <chrono>
@@ -31,8 +32,8 @@ void print_results(const std::string &testname, int capacity,
               << (100.0 * hits[0] / get_operations[0]) << "%" << std::endl;
     std::cout << "LRU-K - Hit rate:  " << std::fixed << std::setprecision(2)
               << (100.0 * hits[1] / get_operations[1]) << "%" << std::endl;
-    // std::cout << "ARC - Hit rate:  " << std::fixed << std::setprecision(2)
-    //           << (100.0 * hits[2] / get_operations[2]) << "%" << std::endl;
+    std::cout << "LFU - Hit rate:  " << std::fixed << std::setprecision(2)
+              << (100.0 * hits[2] / get_operations[2]) << "%" << std::endl;
 }
 
 void test_hotdata_acess() {
@@ -45,14 +46,15 @@ void test_hotdata_acess() {
 
     MinCache::LruCache<int, std::string> lru(CAPACITY);
     MinCache::LruKCache<int, std::string> lruk(CAPACITY, 2 * CAPACITY, 2);
+    MinCache::LfuCache<int, std::string> lfu(CAPACITY);
 
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    std::array<MinCache::CachePolicy<int, std::string> *, 2> caches = {&lru,
-                                                                       &lruk};
-    std::vector<int> hits(2, 0);
-    std::vector<int> get_operations(2, 0);
+    std::array<MinCache::CachePolicy<int, std::string> *, 3> caches = {
+        &lru, &lruk, &lfu};
+    std::vector<int> hits(3, 0);
+    std::vector<int> get_operations(3, 0);
 
     for (int i = 0; i < caches.size(); i++) {
         for (int op = 0; op < OPERATIONS; op++) {
@@ -92,11 +94,12 @@ void test_loop_pattern() {
 
     MinCache::LruCache<int, std::string> lru(CAPACITY);
     MinCache::LruKCache<int, std::string> lruk(CAPACITY, 2 * CAPACITY, 2);
+    MinCache::LfuCache<int, std::string> lfu(CAPACITY);
 
-    std::array<MinCache::CachePolicy<int, std::string> *, 2> caches = {&lru,
-                                                                       &lruk};
-    std::vector<int> hits(2, 0);
-    std::vector<int> get_operations(2, 0);
+    std::array<MinCache::CachePolicy<int, std::string> *, 3> caches = {
+        &lru, &lruk, &lfu};
+    std::vector<int> hits(3, 0);
+    std::vector<int> get_operations(3, 0);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -138,13 +141,14 @@ void test_workload_shift() {
 
     MinCache::LruCache<int, std::string> lru(CAPACITY);
     MinCache::LruKCache<int, std::string> lruk(CAPACITY, 2 * CAPACITY, 2);
+    MinCache::LfuCache<int, std::string> lfu(CAPACITY);
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::array<MinCache::CachePolicy<int, std::string> *, 2> caches = {&lru,
-                                                                       &lruk};
-    std::vector<int> hits(2, 0);
-    std::vector<int> get_operations(2, 0);
+    std::array<MinCache::CachePolicy<int, std::string> *, 3> caches = {
+        &lru, &lruk, &lfu};
+    std::vector<int> hits(3, 0);
+    std::vector<int> get_operations(3, 0);
 
     for (int i = 0; i < caches.size(); ++i) {
         for (int key = 0; key < 1000; ++key) {
