@@ -1,10 +1,10 @@
-#include <cstdint>
-#include <unordered_map>
 #pragma
 
 #include "CachePolicy.h"
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 
 namespace MinCache {
 
@@ -101,6 +101,8 @@ public:
             get_internal(it->second, value);
             return;
         }
+
+        put_internal(key, value);
     }
 
     bool get(Key key, Value &value) override {
@@ -134,7 +136,7 @@ private:
     void add_freqNum();
     void decrease_freqNum(int num);
     void handle_over_MaxAverageNum();
-    void update_MinFreq(int freq);
+    void update_MinFreq();
 
 private:
     int _capacity;
@@ -147,5 +149,126 @@ private:
     NodeMap _nodeMap;
     std::unordered_map<int, FreqList<Key, Value> *> _freqToFreqList;
 };
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::get_internal(NodePtr node, Value &value) {
+    value = node->value;
+    remove_from_freqList(node);
+    node->freq++;
+    add_to_freqList(node);
+    if (node->freq - 1 == _minFreq &&
+        _freqToFreqList[node->freq - 1]->is_empty())
+        _minFreq++;
+
+    add_freqNum();
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::put_internal(Key key, Value value) {
+    if (_nodeMap.size() == _capacity) {
+        kick_out();
+    }
+
+    NodePtr node = std::make_shared<Node>(key, value);
+    _nodeMap[key] = node;
+    add_to_freqList(node);
+    add_freqNum();
+    _minFreq = std::min(_minFreq, 1);
+}
+
+template <typename Key, typename Value> void LfuCache<Key, Value>::kick_out() {
+    NodePtr node = _freqToFreqList[_minFreq]->get_firstNode();
+    remove_from_freqList(node);
+    _nodeMap.erase(node->key);
+    decrease_freqNum(node->freq);
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::remove_from_freqList(NodePtr node) {
+    if (!node) {
+        return;
+    }
+
+    auto freq = node->freq;
+    _freqToFreqList[freq]->remove_node(node);
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::add_to_freqList(NodePtr node) {
+    if (!node) {
+        return;
+    }
+
+    auto freq = node->freq;
+    if (_freqToFreqList.find(node->freq) == _freqToFreqList.end()) {
+        _freqToFreqList[node->freq] = new FreqList<Key, Value>(node->freq);
+    }
+
+    _freqToFreqList[freq]->add_node(node);
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::add_freqNum() {
+    _curTotalNum++;
+
+    if (_nodeMap.empty()) {
+        _curAverAgeNum = 0;
+
+    } else {
+        _curAverAgeNum = _curTotalNum / _nodeMap.size();
+    }
+
+    if (_curAverAgeNum > _maxAverageNum) {
+        handle_over_MaxAverageNum();
+    }
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::decrease_freqNum(int num) {
+    _curTotalNum -= num;
+    if (_nodeMap.empty()) {
+        _curTotalNum = 0;
+    } else {
+        _curAverAgeNum = _curTotalNum / _nodeMap.size();
+    }
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::handle_over_MaxAverageNum() {
+    if (_nodeMap.empty()) {
+        return;
+    }
+
+    for (auto it = _nodeMap.begin(); it != _nodeMap.end(); it++) {
+        if (!it->second)
+            continue;
+        NodePtr node = it->second;
+
+        remove_from_freqList(node);
+
+        node->freq -= _maxAverageNum / 2;
+        if (node->freq < 1)
+            node->freq = 1;
+
+        add_to_freqList(node);
+    }
+
+    update_MinFreq();
+}
+
+template <typename Key, typename Value>
+void LfuCache<Key, Value>::update_MinFreq() {
+    _minFreq = INT8_MAX;
+
+    for (const auto &pair : _freqToFreqList) {
+        if (pair.second && !pair.second->is_empty()) {
+            _minFreq = std::min(_minFreq, pair.first);
+        }
+    }
+
+    if (_minFreq == INT8_MAX) {
+        _minFreq = 1;
+    }
+}
 
 } // namespace MinCache
